@@ -41,13 +41,13 @@ Usage Examples
     browser = ms.MorningStarStmtBrowser()
     browser.download_stmt('xnas', 'AAPL')
     
-##### ● Login Morningstar account before download
+##### Login Morningstar account before download
 
     browser.login('xxiiaaon', 'password')
     browser.download_stmt('xnas', 'AAPL')
     # market code xnas for NASDAQ and xnys for NYSE
 
-##### ● Specify download directory and log directory
+##### Specify download directory and log directory
 
     browser = ms.MorningStarStmtBrowser(download_dir='/User/xxiiaaon/stmt', log_dir='/User/xxiiaaon/log', log_level=logging.Info)
     
@@ -57,13 +57,13 @@ Usage Examples
     import morningstar_stmt as ms
     ms.download_all_stmt([('xnas', 'AAPL'), ('xnax', 'AAPL')])
     
-##### ● Use predefined list
+##### Use predefined list
 
     import morningstar_stmt as ms
     from morningstar_stmt import tickerlist as tl
     ms.download_all_stmt(tl.all)
     # other list like tl.xnas for NASDAQ and tl.xnys for NYSE
     
-##### ● Login when download with ticker list
+##### Login when download with ticker list
 
     ms.download_all_stmt(ms.MorningstarAccount('xxiiaaon', 'password'), tickerlist.all)
