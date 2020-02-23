@@ -4,17 +4,22 @@ import logging
 import selenium
 import morningstar_stmt.tickerlist
 from selenium import webdriver
-from typing import Tuple
+from typing import Tuple, List
 from pathlib import Path
+
+__ch = logging.StreamHandler()
+__ch.setLevel(logging.DEBUG)
+__ch.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+__logger = logging.getLogger('morningstar-stmt')
+__logger.addHandler(__ch)
 
 class WaitException(Exception):
     """Wait Failed"""
     pass
 
 class MorningStarStmtBrowser(object):
-    def __init__(self, download_dir='.', log_dir='.', log_level=logging.INFO):
+    def __init__(self, download_dir=os.getcwd(), log_level=logging.INFO):
         self.download_dir = download_dir
-        self.__log_dir = log_dir
         self.__temp_dir = os.path.join(download_dir, '.temp')
         Path(self.__temp_dir).mkdir(parents=True, exist_ok=True)
 
@@ -26,17 +31,8 @@ class MorningStarStmtBrowser(object):
         })
         self.browser = webdriver.Chrome(chrome_options=options)
 
-        fmt = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-        fh = logging.FileHandler(os.path.join(log_dir, 'morningstar-stmt.log'))
-        fh.setLevel(log_level)
-        fh.setFormatter(fmt)
-        ch = logging.StreamHandler()
-        ch.setLevel(log_level)
-        ch.setFormatter(fmt)
         self.logger = logging.getLogger('morningstar-stmt')
         self.logger.setLevel(log_level)
-        self.logger.addHandler(fh)
-        self.logger.addHandler(ch)
 
     
     def login(self, username, password):
@@ -45,6 +41,7 @@ class MorningStarStmtBrowser(object):
         self.browser.find_element_by_xpath('//input[@name="password"]').send_keys(password)
         self.browser.find_element_by_xpath('//label[@class="mdc-checkbox mds-form__checkbox"]').click()
         self.browser.find_element_by_xpath('//button[@type="submit"]').click()
+        time.sleep(10)
     
 
     def download_stmt(self, market, ticker) -> Tuple[int, str]:
@@ -56,7 +53,7 @@ class MorningStarStmtBrowser(object):
         try:
             self.browser.get('https://www.morningstar.com/stocks/{}/{}/financials'.format(market, ticker))
 
-            if 'Page Not Found | Morningstar' == self.browser.title:
+            if 'Page Not Found | Morningstar' == self.browser.title or 'Error | Morningstar' == self.browser.title:
                 self.logger.info('market[{}] ticker[{}] financials page not found!'.format(market, ticker))
                 return 1, 'Page Not Found'
 
@@ -67,7 +64,7 @@ class MorningStarStmtBrowser(object):
             self.__wait_click('//mds-button[@value="Cash Flow"]')
             self.__wait_click('//div[@class="sal-financials-details__exportSection ng-scope"]//button[@class="sal-financials-details__export mds-button mds-button--small"]')
         except selenium.common.exceptions.ElementClickInterceptedException:
-            self.logger.error('market[{}] ticker[{}] download failed - click error'.format(market, ticker))
+            self.logger.warning('{} {} download failed - click error'.format(market, ticker))
             self.browser.refresh()
             return -1, 'Download Failed - Click Error'
         except WaitException:
@@ -80,13 +77,13 @@ class MorningStarStmtBrowser(object):
         balance_file = os.path.join(self.__temp_dir, annual_balance)
         income_file = os.path.join(self.__temp_dir, annual_income)
         cash_file = os.path.join(self.__temp_dir, annual_cash)
-        self.logger.debug('market[{}] ticker[{}] wait for downloading finish'.format(market, ticker))
+        self.logger.debug('{} {} wait for downloading finish'.format(market, ticker))
         while os.path.exists(balance_file) is False or os.path.exists(income_file) is False or os.path.exists(cash_file) is False:
             time.sleep(1)
 
-        os.rename(balance_file, os.path.join(self.download_dir, '{}_{}'.format(ticker, annual_balance)))
-        os.rename(income_file, os.path.join(self.download_dir, '{}_{}'.format(ticker, annual_income)))
-        os.rename(cash_file, os.path.join(self.download_dir, '{}_{}'.format(ticker, annual_cash)))
+        os.rename(balance_file, os.path.join(self.download_dir, '{}_{}_{}'.format(market, ticker, annual_balance)))
+        os.rename(income_file, os.path.join(self.download_dir, '{}_{}_{}'.format(market, ticker, annual_income)))
+        os.rename(cash_file, os.path.join(self.download_dir, '{}_{}_{}'.format(market, ticker, annual_cash)))
         
         return 0, 'Successful'
     
@@ -134,8 +131,8 @@ class MorningstarAccount(object):
         self.password = password
 
 
-def download_all_stmt(download_dir='.', log_dir='.', log_level=logging.DEBUG, account:MorningstarAccount=None):
-    browser = MorningStarStmtBrowser(download_dir=download_dir, log_dir=log_dir, log_level=log_level)
+def download_stmt(tickerlist:List, download_dir=os.getcwd(), log_level=logging.INFO, account:MorningstarAccount=None):
+    browser = MorningStarStmtBrowser(download_dir=download_dir, log_level=log_level)
     if account is not None:
         browser.login(account.username, account.password)
     
@@ -145,12 +142,11 @@ def download_all_stmt(download_dir='.', log_dir='.', log_level=logging.DEBUG, ac
             done_list = {x.strip() : 1 for x in f.readlines()}
 
     with open(os.path.join(browser.download_dir, 'done'), 'a+') as done_file:
-        current = len(done_list)
-        total = len(tickerlist.all)
-        for market, ticker in tickerlist.all:
-            current += 1
+        total = len(tickerlist)
+        for i in range(len(tickerlist)):
+            market, ticker = tickerlist[i].split(',', 2)
             if ticker in done_list:
-                browser.logger.info('skip {} {}'.format(market, ticker))
+                browser.logger.info('skip {} {} ({}/{})'.format(market, ticker, i+1, total))
                 continue
 
             ret, res = browser.download_stmt(market, ticker)
@@ -158,6 +154,6 @@ def download_all_stmt(download_dir='.', log_dir='.', log_level=logging.DEBUG, ac
                 browser.logger.warning('retry {} {}'.format(market, ticker))
                 ret, res = browser.download_stmt(market, ticker)
 
-            browser.logger.info('{} {} {} ({}/{})'.format(market, ticker, res, current, total))
+            browser.logger.info('{} {} {} ({}/{})'.format(market, ticker, res, i+1, total))
             done_file.write("{}\n".format(ticker))
             done_file.flush()
