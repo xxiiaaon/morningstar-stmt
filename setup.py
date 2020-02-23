@@ -5,7 +5,7 @@ with open("README.md", "r") as f:
 
 setuptools.setup(
     name="morningstar_stmt",
-    version="0.0.1",
+    version="0.0.2",
     author="xxiiaaon",
     author_email="xxiiaaon@gmail.com",
     description="Morningstar Financials Statement Downloader",

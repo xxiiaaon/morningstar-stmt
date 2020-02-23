@@ -5,8 +5,8 @@ morningstar-stmt
 
 morningstar-stmt is a simple Python module for downloading financial statement from [www.morningstar.com](http://www.morningstar.com/).
 
-- Current Version: v0.0.1
-- Version Released: 02/22/2020
+- Current Version: v0.0.2
+- Version Released: 02/23/2020
 
 Overview
 --------
