@@ -24,6 +24,7 @@ class MorningStarStmtBrowser(object):
         Path(self.__temp_dir).mkdir(parents=True, exist_ok=True)
 
         options = webdriver.ChromeOptions() 
+        options.add_argument("--headless")
         options.add_experimental_option("prefs", {
         "download.default_directory": self.__temp_dir,
         "download.prompt_for_download": False,
@@ -34,6 +35,8 @@ class MorningStarStmtBrowser(object):
         self.logger = logging.getLogger('morningstar-stmt')
         self.logger.setLevel(log_level)
 
+    def close(self):
+        self.browser.quit()
     
     def login(self, username, password):
         self.browser.get('https://www.morningstar.com/sign-in')
