@@ -43,7 +43,7 @@ def annual_stmt(ticker_list=ms.tickerlist.all_quote, from_annual=1970, save_file
     b=ms.MorningStarStmtBrowser()
     done_cnt = 0
     all_cnt = len(ticker_list)
-    ret = {}
+    ret_val = {}
     for item in ticker_list:
         market, ticker, _ = item.split(',', 2)
         output = '{}_{}_stmt.json'.format(market, ticker)
@@ -52,7 +52,7 @@ def annual_stmt(ticker_list=ms.tickerlist.all_quote, from_annual=1970, save_file
             done_cnt += 1
             continue
 
-        for file in glob.glob('*.xls'):
+        for file in glob.glob('*{}*.xls'.format(ticker)):
             os.remove(file)
 
         done_cnt += 1
@@ -66,7 +66,9 @@ def annual_stmt(ticker_list=ms.tickerlist.all_quote, from_annual=1970, save_file
             continue
         
         data = {}
-        for xls_file in glob.glob('*.xls'):
+        for xls_file in glob.glob('*{}*.xls'.format(ticker)):
+            stmt_type = xls_file.split('_', 3)[2]
+            stmt_type = 'balance' if stmt_type == 'Balance Sheet' else 'cash' if stmt_type == 'Cash Flow' else 'income'
             try:
                 wb = xlrd.open_workbook(xls_file)
                 sh = wb.sheet_by_name('sheet1')
@@ -78,16 +80,26 @@ def annual_stmt(ticker_list=ms.tickerlist.all_quote, from_annual=1970, save_file
                 key = row[0].strip()
                 for i in range(1, len(row)):
                     annual = annuals[i]
-                    data[annual] = data.get(annual, {key: row[i]})
-                    data[annual].update({key: row[i]})
+                    if annual != 'TTM' and int(annual) <= int(from_annual):
+                        continue
+                    value = int(row[i].replace(',', '')) if row[i] is not '' else None
+                    annual_data = data.get(annual, {stmt_type: {key: value}})
+                    type_data = annual_data.get(stmt_type, {key: value})
+                    type_data.update({key: value})
+                    annual_data.update({stmt_type: type_data})
+                    data.update({annual: annual_data})
+
+        for file in glob.glob('*{}*.xls'.format(ticker)):
+            os.remove(file)
 
         if save_file:
             with open(output, 'w') as f:
                 f.writelines(json.dumps(data, indent=4))
         else:
-            ret[ticker] = data
+            ret_val[ticker] = data
 
-    return ret
+    b.close()
+    return ret_val
 
 
 def key_ratio_annual_fixture():
